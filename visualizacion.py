@@ -1,80 +1,123 @@
 import matplotlib.pyplot as plt
-from graphviz import Digraph
+# from graphviz import Digraph
+import xml.etree.ElementTree as ET
+import pandas as pd
 
-def draw_afd(afd, filename="afd"):
-    dot = Digraph(comment="AFD Generado", format="png")
-    dot.attr(rankdir="LR")  # Orientación de izquierda a derecha
 
-    # Agregar estados
-    for state in afd["states"]:
-        if state == afd["initial_state"]:
-            # Estado inicial con un color diferente
-            dot.node(str(state), str(state), shape="circle", style="filled", fillcolor="lightblue")
-        elif state in afd["final_states"]:
-            # Estado final con un color diferente
-            dot.node(str(state), str(state), shape="doublecircle", style="filled", fillcolor="lightgreen")
-        else:
-            # Estado normal
-            dot.node(str(state), str(state), shape="circle")
+# def draw_afd(afd, filename="afd"):
+#     print("Generando gráfico del AFD...", afd)
 
-    # Marcar el estado inicial con una flecha
-    dot.node("start", shape="plaintext", label="")
-    dot.edge("start", str(afd["initial_state"]), style="bold")
+#     dot = Digraph(comment="AFD Generado", format="png")
+#     dot.attr(rankdir="LR")  # Orientación de izquierda a derecha
 
-    # Agregar transiciones
-    for (state, symbol), next_state in afd["transitions"].items():
-        dot.edge(str(state), str(next_state), label=symbol, fontsize="10", fontcolor="blue")
+#     # Agregar estados
+#     for state in afd["states"]:
+#         if state == afd["initial_state"]:
+#             dot.node(str(state), str(state), shape="circle", style="filled", fillcolor="lightblue")
+#         elif state in afd["final_states"]:
+#             dot.node(str(state), str(state), shape="doublecircle", style="filled", fillcolor="lightgreen")
+#         else:
+#             dot.node(str(state), str(state), shape="circle")
 
-    # Guardar y mostrar el gráfico
-    dot.render(filename, cleanup=True)
-    print(f"AFD guardado como {filename}.png")
+#     # Marcar el estado inicial con una flecha
+#     dot.node("start", shape="plaintext", label="")
+#     dot.edge("start", str(afd["initial_state"]), style="bold")
 
-def plot_evolution(best_fitness, avg_fitness, error):
-    """Grafica la evolución del fitness y error."""
-    plt.figure(figsize=(12, 6))
+#     # Agregar transiciones
+#     for (state, symbol), next_state in afd["transitions"].items():
+#         dot.edge(str(state), str(next_state), label=symbol, fontsize="10", fontcolor="blue")
 
-    plt.subplot(1, 2, 1)
-    plt.plot(best_fitness, label="Mejor Fitness")
-    plt.plot(avg_fitness, label="Fitness Promedio")
-    plt.xlabel("Generación")
-    plt.ylabel("Fitness")
-    plt.title("Evolución del Fitness")
-    plt.legend()
+#     # Guardar y mostrar el gráfico
+#     dot.render(filename, cleanup=True)
+#     print(f"AFD guardado como {filename}.png")
 
-    plt.subplot(1, 2, 2)
-    plt.plot(error, label="Error", color="red")
-    plt.xlabel("Generación")
-    plt.ylabel("Error")
-    plt.title("Evolución del Error")
-    plt.legend()
-
+def plot_evolution(best_fitness_history, avg_fitness_history, error_history, diversity_history=None):
+    """
+    Grafica la evolución del fitness y el error a lo largo de las generaciones.
+    
+    Args:
+        best_fitness_history: Lista con el mejor fitness de cada generación
+        avg_fitness_history: Lista con el fitness promedio de cada generación
+        error_history: Lista con el error de cada generación
+        diversity_history: Lista con la diversidad de la población de cada generación (opcional)
+    """
+    import matplotlib.pyplot as plt
+    
+    # Crear una figura con dos subplots
+    if diversity_history is not None:
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12), sharex=True)
+    else:
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+    
+    # Graficar el fitness
+    generations = range(1, len(best_fitness_history) + 1)
+    ax1.plot(generations, best_fitness_history, 'b-', label='Mejor Fitness')
+    ax1.plot(generations, avg_fitness_history, 'g-', label='Fitness Promedio')
+    ax1.set_ylabel('Fitness')
+    ax1.set_title('Evolución del Fitness')
+    ax1.legend()
+    ax1.grid(True)
+    
+    # Graficar el error
+    ax2.plot(generations, error_history, 'r-', label='Error')
+    ax2.set_ylabel('Error')
+    ax2.set_title('Evolución del Error')
+    ax2.legend()
+    ax2.grid(True)
+    
+    # Graficar la diversidad si está disponible
+    if diversity_history is not None:
+        ax3.plot(generations, diversity_history, 'm-', label='Diversidad')
+        ax3.set_ylabel('Diversidad')
+        ax3.set_xlabel('Generación')
+        ax3.set_title('Evolución de la Diversidad')
+        ax3.legend()
+        ax3.grid(True)
+    else:
+        ax2.set_xlabel('Generación')
+    
     plt.tight_layout()
+    plt.savefig('evolucion.png')
     plt.show()
 
-import xml.etree.ElementTree as ET
+def generate_transition_table(afd):
+    """Genera una tabla de transiciones visual usando Matplotlib e incluye los estados en texto."""
+    states = sorted(afd["states"])  # Ordenar estados para mejor visualización
+    symbols = sorted(set(symbol for _, symbol in afd["transitions"]))  # Obtener símbolos únicos
 
-def save_afd_to_jflap(afd, filename="afd.jff"):
-    # Crear la estructura XML
-    structure = ET.Element('structure')
-    ET.SubElement(structure, 'type').text = 'fa'
-    automaton = ET.SubElement(structure, 'automaton')
+    # Crear DataFrame con los datos de la tabla
+    table_data = []
+    for state in states:
+        row = [f"→ {state}" if state == afd["initial_state"] else 
+               f"*{state}" if state in afd["final_states"] else 
+               str(state)]  # Estado inicial con "→", finales con "*"
+        
+        for symbol in symbols:
+            next_state = afd["transitions"].get((state, symbol), "-")  # "-" si no hay transición
+            row.append(next_state)
+        table_data.append(row)
 
-    # Agregar estados
-    for state in afd["states"]:
-        state_element = ET.SubElement(automaton, 'state', id=str(state), name=str(state))
-        if state == afd["initial_state"]:
-            ET.SubElement(state_element, 'initial')
-        if state in afd["final_states"]:
-            ET.SubElement(state_element, 'final')
+    df = pd.DataFrame(table_data, columns=["Estado"] + symbols)
 
-    # Agregar transiciones
-    for (state, symbol), next_state in afd["transitions"].items():
-        transition = ET.SubElement(automaton, 'transition')
-        ET.SubElement(transition, 'from').text = str(state)
-        ET.SubElement(transition, 'to').text = str(next_state)
-        ET.SubElement(transition, 'read').text = symbol
+    # Crear la figura de Matplotlib
+    fig, ax = plt.subplots(figsize=(len(symbols) + 4, len(states) + 3))
+    ax.axis('tight')
+    ax.axis('off')
 
-    # Guardar el archivo
-    tree = ET.ElementTree(structure)
-    tree.write(filename, encoding='utf-8', xml_declaration=True)
-    print(f"AFD guardado como {filename}")
+    # Dibujar la tabla
+    ax.table(cellText=df.values, colLabels=df.columns, cellLoc="center", loc="center")
+
+    # Agregar información de los estados como texto dentro de la imagen
+    info_text = (
+        f"Conjunto de Estados: {', '.join(map(str, afd['states']))}\n"
+        f"Estados Finales: {', '.join(map(str, afd['final_states']))}\n"
+        f"Estado Inicial: {afd['initial_state']}"
+    )
+    
+    plt.figtext(0.5, 0.02, info_text, fontsize=10, ha="center", bbox={"facecolor":"white", "alpha":0.6, "pad":5})
+
+    # Agregar título
+    plt.title("Tabla de Transiciones del AFD", fontsize=14, fontweight="bold")
+
+    # Mostrar la tabla visualmente
+    plt.show()
