@@ -1,78 +1,52 @@
 import random
-from afd import create_random_afd
-from evaluacion import evaluate_afd
+import copy
 
 POPULATION_SIZE = 20
-CXPB = 0.85        # Alta probabilidad de cruce para generar nuevas soluciones
-MUTPB = 0.6        # Probabilidad de mutación moderada
-ELITE_RATIO = 0.05  # Elitismo mínimo (solo los mejores 5%)
-DIVERSITY_THRESHOLD = 0.1  # Umbral para considerar individuos como diversos
+CXPB = 0.85
+MUTPB = 0.6
+ELITE_RATIO = 0.05
+DIVERSITY_THRESHOLD = 0.1
 
-# Función para medir la diversidad entre dos AFDs
 def diversity_measure(afd1, afd2):
-    """Calcula qué tan diferentes son dos AFDs basado en sus transiciones."""
     if not afd1["transitions"] or not afd2["transitions"]:
-        return 1.0  # Máxima diversidad si no hay transiciones
+        return 1.0
         
-    # Contar diferencias en las transiciones
     total_keys = set(afd1["transitions"].keys()).union(set(afd2["transitions"].keys()))
-    differences = 0
+    differences = sum(1 for key in total_keys if afd1["transitions"].get(key) != afd2["transitions"].get(key))
     
-    for key in total_keys:
-        val1 = afd1["transitions"].get(key, None)
-        val2 = afd2["transitions"].get(key, None)
-        if val1 != val2:
-            differences += 1
-    
-    # Normalizar por el número total de transiciones
     return differences / max(1, len(total_keys))
 
-# Nueva función de mutación más agresiva
 def mutate(afd, mutation_rate=0.2):
-    """Realiza mutación con intensidad variable según el contexto."""
-    # Copia profunda para evitar modificar el original
-    import copy
     mutated_afd = copy.deepcopy(afd)
     
-    # Número de mutaciones basado en el tamaño del AFD y la tasa de mutación
     transitions = list(mutated_afd["transitions"].keys())
     num_mutations = max(1, int(len(transitions) * mutation_rate))
-    
-    # Seleccionar transiciones a mutar
     selected_keys = random.sample(transitions, min(num_mutations, len(transitions)))
     
     for key in selected_keys:
-        # 30% del tiempo: mutación completamente aleatoria
         if random.random() < 0.3:
             mutated_afd["transitions"][key] = random.choice(list(mutated_afd["states"]))
         else:
-            # 70% del tiempo: cambio inteligente que evita el estado actual
             current = mutated_afd["transitions"][key]
             available_states = [s for s in mutated_afd["states"] if s != current]
-            if available_states:  # Si hay otros estados disponibles
+            if available_states:
                 mutated_afd["transitions"][key] = random.choice(available_states)
     
-    # Probabilidad pequeña de mutar el estado inicial
     if random.random() < 0.05:
         mutated_afd["initial_state"] = random.choice(list(mutated_afd["states"]))
     
-    # Probabilidad pequeña de cambiar estados de aceptación/finales
-    # Solo si existe la clave en el diccionario
     if "final_states" in mutated_afd and random.random() < 0.1:
-        # Convertir a lista si es un conjunto para poder modificarlo
         final_states = list(mutated_afd["final_states"]) if isinstance(mutated_afd["final_states"], set) else mutated_afd["final_states"]
         
         for state in mutated_afd["states"]:
-            if random.random() < 0.2:  # 20% de probabilidad por cada estado
+            if random.random() < 0.2:
                 if state in final_states:
                     final_states.remove(state)
                 else:
                     final_states.append(state)
         
-        # Volver a guardar el conjunto actualizado
         mutated_afd["final_states"] = set(final_states) if isinstance(mutated_afd["final_states"], set) else final_states
     
-    # Lo mismo para accepting_states si existe
     if "accepting_states" in mutated_afd and random.random() < 0.1:
         accepting_states = list(mutated_afd["accepting_states"]) if isinstance(mutated_afd["accepting_states"], set) else mutated_afd["accepting_states"]
         
@@ -87,47 +61,32 @@ def mutate(afd, mutation_rate=0.2):
     
     return mutated_afd
 
-# Mejorar selección de padres con diversidad
 def select_parents(population, fitnesses, conjugations):
-    """Selecciona padres priorizando fitness pero manteniendo diversidad."""
-    # Primero seleccionamos la élite por fitness
     elite_size = max(1, int(ELITE_RATIO * len(population)))
     elite_indices = sorted(range(len(fitnesses)), key=lambda i: fitnesses[i], reverse=True)[:elite_size]
     elite = [population[i] for i in elite_indices]
     
-    # Seleccionamos el resto mediante torneo con presión por diversidad
     selected = elite.copy()
     
     while len(selected) < POPULATION_SIZE:
-        # Selección por torneo
         tournament_size = min(4, len(population))
         candidates = random.sample(range(len(population)), tournament_size)
         tournament_winner = max(candidates, key=lambda i: fitnesses[i])
         candidate = population[tournament_winner]
         
-        # Verificar diversidad con respecto a los ya seleccionados
-        is_diverse = True
-        for existing in selected:
-            if diversity_measure(candidate, existing) < DIVERSITY_THRESHOLD:
-                is_diverse = False
-                break
+        is_diverse = all(diversity_measure(candidate, existing) >= DIVERSITY_THRESHOLD for existing in selected)
         
-        # Aceptar si es diverso o con probabilidad decreciente
-        if is_diverse or random.random() < 0.3:  # 30% de probabilidad de aceptar incluso si no es diverso
+        if is_diverse or random.random() < 0.3:
             selected.append(candidate)
     
     return selected
 
-# Mejorar el cruce con más variedad
 def improved_crossover(afd1, afd2):
-    """Implementa múltiples estrategias de cruce y elige una aleatoriamente."""
     strategy = random.choice(["one_point", "uniform", "state_swap"])
     
-    import copy
     child1, child2 = copy.deepcopy(afd1), copy.deepcopy(afd2)
     
     if strategy == "one_point":
-        # Cruce de un punto tradicional
         keys = list(afd1["transitions"].keys())
         if keys:
             point = random.randint(0, len(keys))
@@ -136,17 +95,14 @@ def improved_crossover(afd1, afd2):
                     child1["transitions"][key], child2["transitions"][key] = child2["transitions"][key], child1["transitions"][key]
     
     elif strategy == "uniform":
-        # Cruce uniforme
         for key in afd1["transitions"]:
             if random.random() < 0.5:
                 child1["transitions"][key], child2["transitions"][key] = child2["transitions"][key], child1["transitions"][key]
     
-    else:  # state_swap
-        # Intercambio de estados completos (más disruptivo)
+    else:
         swap_state1 = random.choice(list(afd1["states"]))
         swap_state2 = random.choice(list(afd2["states"]))
         
-        # Intercambiar todas las transiciones que van a estos estados
         for key in child1["transitions"]:
             if child1["transitions"][key] == swap_state1:
                 child1["transitions"][key] = swap_state2
@@ -155,48 +111,34 @@ def improved_crossover(afd1, afd2):
             if child2["transitions"][key] == swap_state2:
                 child2["transitions"][key] = swap_state1
     
-    # Intercambiar estados finales (aceptación) con probabilidad 50%
-    # Verificamos que existan las claves necesarias
     if "final_states" in child1 and "final_states" in child2 and random.random() < 0.5:
         child1["final_states"], child2["final_states"] = child2["final_states"], child1["final_states"]
     
-    # Alternativa si usa accepting_states
     if "accepting_states" in child1 and "accepting_states" in child2 and random.random() < 0.5:
         child1["accepting_states"], child2["accepting_states"] = child2["accepting_states"], child1["accepting_states"]
     
     return child1, child2
 
-# Función principal de generación de población mejorada
 def generate_new_population(population, fitnesses, conjugations):
-    """Crea una nueva población con mecanismos para mantener diversidad."""
-    # 1. Seleccionar padres
     parents = select_parents(population, fitnesses, conjugations)
     
-    # 2. Crear nueva población
     new_population = []
     
-    # Preservar la élite
     elite_size = max(1, int(ELITE_RATIO * len(population)))
     elite_indices = sorted(range(len(fitnesses)), key=lambda i: fitnesses[i], reverse=True)[:elite_size]
     new_population.extend([population[i] for i in elite_indices])
     
-    # Crear nuevos individuos mediante cruce y mutación
     while len(new_population) < POPULATION_SIZE:
-        # Seleccionar dos padres diferentes
         parent1, parent2 = random.sample(parents, 2)
         
-        # Aplicar cruce con alta probabilidad
         if random.random() < CXPB:
             child1, child2 = improved_crossover(parent1, parent2)
         else:
-            import copy
             child1, child2 = copy.deepcopy(parent1), copy.deepcopy(parent2)
         
-        # Aplicar mutación con probabilidad variable
         if random.random() < MUTPB:
-            # Mayor tasa de mutación si hay poca diversidad
             diversity = diversity_measure(child1, parent1)
-            mutation_rate = max(0.1, 0.5 - diversity)  # Entre 10% y 50%
+            mutation_rate = max(0.1, 0.5 - diversity)
             child1 = mutate(child1, mutation_rate)
             
         if random.random() < MUTPB:
@@ -204,33 +146,26 @@ def generate_new_population(population, fitnesses, conjugations):
             mutation_rate = max(0.1, 0.5 - diversity)
             child2 = mutate(child2, mutation_rate)
         
-        # Añadir hijos a la nueva población
         new_population.append(child1)
         if len(new_population) < POPULATION_SIZE:
             new_population.append(child2)
     
-    # Asegurar diversidad en la población final
     population_diversity = calculate_population_diversity(new_population)
     
-    # Si la diversidad es muy baja, introducir mutaciones más agresivas
-    if population_diversity < 0.1:  # Umbral de diversidad crítica
-        # Reemplazar algunos individuos (excepto la élite) con mutaciones agresivas
+    if population_diversity < 0.1:
         for i in range(elite_size, len(new_population)):
-            if random.random() < 0.3:  # 30% de probabilidad de mutación agresiva
-                new_population[i] = mutate(new_population[i], mutation_rate=0.5)  # 50% de las transiciones
+            if random.random() < 0.3:
+                new_population[i] = mutate(new_population[i], mutation_rate=0.5)
     
     return new_population[:POPULATION_SIZE]
 
-# Función para calcular la diversidad de toda la población
 def calculate_population_diversity(population):
-    """Calcula la diversidad promedio entre todos los pares de individuos."""
     if len(population) <= 1:
         return 0.0
     
     total_diversity = 0.0
     comparisons = 0
     
-    # Comparar cada par de individuos
     for i in range(len(population)):
         for j in range(i+1, len(population)):
             total_diversity += diversity_measure(population[i], population[j])
