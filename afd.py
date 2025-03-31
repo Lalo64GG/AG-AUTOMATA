@@ -4,7 +4,7 @@ def create_random_afd(num_states, alphabet):
     """Crea un AFD aleatorio."""
     states = set(range(num_states))
     initial_state = 0
-    final_states = set(random.sample(list(states), max(1, num_states // 3)))  # Limita los estados finales
+    final_states = set(random.sample(list(states), max(1, num_states // 3)))  
     transitions = {}
 
     for state in states:

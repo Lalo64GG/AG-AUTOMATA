@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tabulate import tabulate
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, scrolledtext
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 def plot_evolution(best_fitness_history, avg_fitness_history, error_history, diversity_history=None):
@@ -59,7 +59,7 @@ def plot_evolution(best_fitness_history, avg_fitness_history, error_history, div
     canvas.draw()
     canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
-def generate_transition_table(afd):
+def generate_transition_table(afd, conjugations=None):
     """Genera una tabla de transiciones legible con tabulate y la muestra en una ventana."""
     states = sorted(list(afd["states"]))
     
@@ -68,41 +68,106 @@ def generate_transition_table(afd):
     
     # Crear ventana Tkinter
     table_window = tk.Toplevel()
-    table_window.title("Tabla de Transiciones del AFD")
-    table_window.geometry("800x600")
+    table_window.title("Detalles del Mejor AFD")
+    table_window.geometry("900x700")
     
-    # Marco principal con scroll
-    main_frame = tk.Frame(table_window)
-    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+    # Crear un notebook para organizar la información en pestañas
+    notebook = ttk.Notebook(table_window)
+    notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
     
-    # Información del AFD
-    info_frame = tk.Frame(main_frame)
-    info_frame.pack(fill=tk.X, pady=10)
+    # ----- PESTAÑA 1: INFORMACIÓN GENERAL -----
+    tab_info = ttk.Frame(notebook)
+    notebook.add(tab_info, text="Información General")
+    
+    # Marco para la información principal
+    info_frame = ttk.LabelFrame(tab_info, text="Datos del AFD", padding=15)
+    info_frame.pack(fill=tk.X, padx=20, pady=15, anchor=tk.N)
     
     # Título
-    title_label = tk.Label(info_frame, text="TABLA DE TRANSICIONES DEL AFD", 
+    title_label = ttk.Label(info_frame, text="AUTÓMATA FINITO DETERMINISTA", 
                            font=("Arial", 16, "bold"))
-    title_label.pack(pady=5)
+    title_label.pack(pady=10)
     
-    # Estado inicial y estados finales
-    initial_state_label = tk.Label(info_frame, 
-                                  text=f"Estado inicial: q{afd['initial_state']}", 
-                                  font=("Arial", 12))
-    initial_state_label.pack(anchor=tk.W)
+    # Información general
+    ttk.Label(info_frame, text=f"Número total de estados: {len(afd['states'])}", 
+             font=("Arial", 12)).pack(anchor=tk.W, pady=3)
     
-    final_states_text = ", ".join([f'q{s}' for s in afd['final_states']])
-    final_states_label = tk.Label(info_frame, 
-                                 text=f"Estados finales: {final_states_text}", 
-                                 font=("Arial", 12))
-    final_states_label.pack(anchor=tk.W)
+    # Conjunto de todos los estados
+    all_states_text = ", ".join([f'q{s}' for s in sorted(afd['states'])])
+    ttk.Label(info_frame, text=f"Conjunto de estados: {all_states_text}", 
+             font=("Arial", 12)).pack(anchor=tk.W, pady=3)
+    
+    ttk.Label(info_frame, text=f"Estado inicial: q{afd['initial_state']}", 
+             font=("Arial", 12)).pack(anchor=tk.W, pady=3)
+    
+    final_states_text = ", ".join([f'q{s}' for s in sorted(afd['final_states'])])
+    ttk.Label(info_frame, text=f"Estados finales: {final_states_text}", 
+             font=("Arial", 12)).pack(anchor=tk.W, pady=3)
     
     alphabet_text = ", ".join([f"'{s}'" if s != " " else "'␣'" for s in alphabet])
-    alphabet_label = tk.Label(info_frame, 
-                             text=f"Alfabeto: {alphabet_text}", 
-                             font=("Arial", 12))
-    alphabet_label.pack(anchor=tk.W)
+    ttk.Label(info_frame, text=f"Alfabeto: {alphabet_text}", 
+             font=("Arial", 12)).pack(anchor=tk.W, pady=3)
     
-    # Preparar los datos para tabulate
+    # Marco para estadísticas de aceptación
+    if conjugations:
+        from afd import accepts_input
+        
+        stats_frame = ttk.LabelFrame(tab_info, text="Estadísticas de Reconocimiento", padding=15)
+        stats_frame.pack(fill=tk.X, padx=20, pady=15, anchor=tk.N)
+        
+        # Calcular palabras aceptadas
+        accepted_words = [word for word in conjugations if accepts_input(afd, word)]
+        acceptance_rate = (len(accepted_words) / len(conjugations)) * 100 if conjugations else 0
+        
+        ttk.Label(stats_frame, text=f"Conjugaciones aceptadas: {len(accepted_words)}/{len(conjugations)}", 
+                 font=("Arial", 12)).pack(anchor=tk.W, pady=3)
+        
+        ttk.Label(stats_frame, text=f"Tasa de aceptación: {acceptance_rate:.2f}%", 
+                 font=("Arial", 12, "bold")).pack(anchor=tk.W, pady=3)
+        
+        # Mostrar ejemplos de palabras aceptadas y rechazadas
+        examples_frame = ttk.Frame(tab_info)
+        examples_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=15)
+        
+        # Ejemplos aceptados
+        accepted_frame = ttk.LabelFrame(examples_frame, text="Ejemplos de conjugaciones aceptadas", padding=10)
+        accepted_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        
+        accepted_text = scrolledtext.ScrolledText(accepted_frame, wrap=tk.WORD, width=30, height=10)
+        accepted_text.pack(fill=tk.BOTH, expand=True)
+        
+        # Mostrar hasta 20 ejemplos
+        for word in accepted_words[:20]:
+            accepted_text.insert(tk.END, f"{word}\n")
+        
+        if len(accepted_words) > 20:
+            accepted_text.insert(tk.END, "...\n")
+        
+        accepted_text.config(state=tk.DISABLED)
+        
+        # Ejemplos rechazados
+        rejected_words = [word for word in conjugations if word not in accepted_words]
+        
+        rejected_frame = ttk.LabelFrame(examples_frame, text="Ejemplos de conjugaciones rechazadas", padding=10)
+        rejected_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        
+        rejected_text = scrolledtext.ScrolledText(rejected_frame, wrap=tk.WORD, width=30, height=10)
+        rejected_text.pack(fill=tk.BOTH, expand=True)
+        
+        # Mostrar hasta 20 ejemplos
+        for word in rejected_words[:20]:
+            rejected_text.insert(tk.END, f"{word}\n")
+        
+        if len(rejected_words) > 20:
+            rejected_text.insert(tk.END, "...\n")
+        
+        rejected_text.config(state=tk.DISABLED)
+    
+    # ----- PESTAÑA 2: TABLA DE TRANSICIONES -----
+    tab_table = ttk.Frame(notebook)
+    notebook.add(tab_table, text="Tabla de Transiciones")
+    
+    # Crear tabla
     table_data = []
     header = ["Estado"] + alphabet + ["Estado Final"]
     
@@ -117,7 +182,7 @@ def generate_transition_table(afd):
             row.append(next_state)
         
         # Marcar si es estado final
-        is_final = "Sí" if state in afd["final_states"] else "No"
+        is_final = "✓" if state in afd["final_states"] else "✗"
         row.append(is_final)
         
         table_data.append(row)
@@ -126,57 +191,91 @@ def generate_transition_table(afd):
     table_str = tabulate(table_data, headers=header, tablefmt="fancy_grid")
     
     # Mostrar tabla en un widget de texto
-    text_frame = tk.Frame(main_frame)
-    text_frame.pack(fill=tk.BOTH, expand=True)
+    table_frame = ttk.Frame(tab_table, padding=15)
+    table_frame.pack(fill=tk.BOTH, expand=True)
     
-    # Scroll vertical
-    scrollbar_y = tk.Scrollbar(text_frame)
-    scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
-    
-    # Scroll horizontal
-    scrollbar_x = tk.Scrollbar(text_frame, orient=tk.HORIZONTAL)
-    scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
-    
-    # Área de texto con fuente monoespaciada para mantener el formato de tabulate
-    text_area = tk.Text(text_frame, wrap=tk.NONE, 
-                       font=("Courier New", 12),
-                       yscrollcommand=scrollbar_y.set,
-                       xscrollcommand=scrollbar_x.set)
-    text_area.pack(fill=tk.BOTH, expand=True)
-    
-    # Vincular scrollbars
-    scrollbar_y.config(command=text_area.yview)
-    scrollbar_x.config(command=text_area.xview)
+    # Área de texto con scroll
+    table_text = scrolledtext.ScrolledText(table_frame, wrap=tk.NONE, 
+                                         font=("Courier New", 12), width=80, height=25)
+    table_text.pack(fill=tk.BOTH, expand=True)
     
     # Insertar la tabla
-    text_area.insert(tk.END, table_str)
-    text_area.config(state=tk.DISABLED)  # Hacer de solo lectura
+    table_text.insert(tk.END, table_str)
+    table_text.config(state=tk.DISABLED)  # Hacer de solo lectura
+    
+    # ----- PESTAÑA 3: LISTADO DE TRANSICIONES -----
+    tab_transitions = ttk.Frame(notebook)
+    notebook.add(tab_transitions, text="Listado de Transiciones")
+    
+    # Marco para las transiciones
+    trans_frame = ttk.Frame(tab_transitions, padding=15)
+    trans_frame.pack(fill=tk.BOTH, expand=True)
+    
+    # Área de texto con scroll
+    trans_text = scrolledtext.ScrolledText(trans_frame, wrap=tk.WORD, 
+                                         font=("Consolas", 12), width=80, height=25)
+    trans_text.pack(fill=tk.BOTH, expand=True)
+    
+    # Formatear y mostrar cada transición
+    trans_text.insert(tk.END, "LISTADO DETALLADO DE TRANSICIONES\n")
+    trans_text.insert(tk.END, "═══════════════════════════════════\n\n")
+    
+    # Ordenar transiciones para mejor visualización
+    transiciones_ordenadas = sorted(afd['transitions'].items(), 
+                                  key=lambda x: (x[0][0], x[0][1]))
+    
+    for (estado_actual, simbolo), siguiente_estado in transiciones_ordenadas:
+        # Formato especial para espacio
+        simbolo_mostrar = simbolo if simbolo != " " else "␣"
+        
+        # Añadir marca si el estado siguiente es final
+        es_final = " (FINAL)" if siguiente_estado in afd["final_states"] else ""
+        
+        linea = f"δ(q{estado_actual}, '{simbolo_mostrar}') = q{siguiente_estado}{es_final}\n"
+        trans_text.insert(tk.END, linea)
+    
+    trans_text.config(state=tk.DISABLED)  # Hacer de solo lectura
 
 def visualize_afd(afd, best_fitness_history=None, avg_fitness_history=None, 
-                 error_history=None, diversity_history=None):
+                 error_history=None, diversity_history=None, conjugations=None):
     """Visualiza el AFD en ventanas de interfaz gráfica."""
     # Crear ventana principal
     root = tk.Tk()
     root.title("Visualización del AFD")
-    root.geometry("300x200")
+    root.geometry("400x300")
+    
+    # Frame principal con padding
+    main_frame = ttk.Frame(root, padding=20)
+    main_frame.pack(fill=tk.BOTH, expand=True)
     
     # Etiqueta informativa
-    tk.Label(root, text="Visualización del AFD", font=("Arial", 16, "bold")).pack(pady=10)
-    tk.Label(root, text="Se han abierto ventanas adicionales\ncon la tabla y la gráfica de evolución").pack(pady=10)
+    ttk.Label(main_frame, text="Visualización del Mejor AFD", 
+             font=("Arial", 16, "bold")).pack(pady=10)
+    
+    # Información sobre el mejor AFD
+    info_text = f"Autómata con {len(afd['states'])} estados y {len(afd['final_states'])} estados finales"
+    ttk.Label(main_frame, text=info_text, font=("Arial", 12)).pack(pady=5)
+    
+    # Frame para botones
+    button_frame = ttk.Frame(main_frame)
+    button_frame.pack(pady=20, fill=tk.X)
     
     # Botones para abrir visualizaciones
-    tk.Button(root, text="Ver Tabla de Transiciones", 
-             command=lambda: generate_transition_table(afd)).pack(pady=5, fill=tk.X, padx=50)
+    ttk.Button(button_frame, text="Ver Detalles del AFD", 
+              command=lambda: generate_transition_table(afd, conjugations)).pack(pady=10, fill=tk.X)
     
     if all(x is not None for x in [best_fitness_history, avg_fitness_history, error_history]):
-        tk.Button(root, text="Ver Gráfica de Evolución", 
-                 command=lambda: plot_evolution(best_fitness_history, avg_fitness_history, 
-                                              error_history, diversity_history)).pack(pady=5, fill=tk.X, padx=50)
+        ttk.Button(button_frame, text="Ver Gráfica de Evolución", 
+                  command=lambda: plot_evolution(best_fitness_history, avg_fitness_history, 
+                                               error_history, diversity_history)).pack(pady=10, fill=tk.X)
     
-    # Mostrar ventanas iniciales
-    generate_transition_table(afd)
+    # Mostrar ventana de detalles automáticamente
+    root.after(100, lambda: generate_transition_table(afd, conjugations))
+    
+    # Mostrar gráfica automáticamente si hay datos
     if all(x is not None for x in [best_fitness_history, avg_fitness_history, error_history]):
-        plot_evolution(best_fitness_history, avg_fitness_history, error_history, diversity_history)
+        root.after(200, lambda: plot_evolution(best_fitness_history, avg_fitness_history, 
+                                             error_history, diversity_history))
     
     # Mantener la interfaz ejecutándose
     root.mainloop()
@@ -205,3 +304,5 @@ def print_transition_table(afd):
         row.append(is_final)
         
         table_data.append(row)
+    
+    return tabulate(table_data, headers=header, tablefmt="fancy_grid")
