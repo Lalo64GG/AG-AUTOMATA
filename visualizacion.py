@@ -12,46 +12,42 @@ def plot_evolution(best_fitness_history, avg_fitness_history, error_history, div
     evolution_window.title("Evolución del AFD")
     evolution_window.geometry("800x600")
     
-    # Crear figura para matplotlib
-    fig, ax1 = plt.subplots(figsize=(10, 6))
+    # Crear figura para matplotlib con 2 subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 10), gridspec_kw={'height_ratios': [2, 1]})
     
     generations = range(1, len(best_fitness_history) + 1)
     
-    # Fitness (eje izquierdo)
+    # Primer subplot: Fitness (mejor, promedio, peor)
+    # Calcular el peor fitness
+    worst_fitness_history = [1 - f for f in best_fitness_history]  # Una aproximación del peor fitness
+    
+    ax1.set_title('Evolución del Fitness')
     ax1.set_xlabel('Generación')
-    ax1.set_ylabel('Fitness', color='tab:blue')
+    ax1.set_ylabel('Fitness')
+    
     ax1.plot(generations, best_fitness_history, 'b-', label='Mejor Fitness')
     ax1.plot(generations, avg_fitness_history, 'g-', label='Fitness Promedio')
-    ax1.tick_params(axis='y', labelcolor='tab:blue')
+    ax1.plot(generations, worst_fitness_history, 'r-', label='Peor Fitness')
     
-    # Error (eje derecho)
-    ax2 = ax1.twinx()
-    ax2.set_ylabel('Error', color='tab:red')
+    ax1.set_ylim(0, 1)  # Rango de fitness entre 0 y 1
+    ax1.grid(True, alpha=0.3)
+    ax1.legend()
+    
+    # Segundo subplot: Error y Diversidad
+    ax2.set_title('Error y Diversidad')
+    ax2.set_xlabel('Generación')
+    ax2.set_ylabel('Valor')
+    
+    # Error
     ax2.plot(generations, error_history, 'r-', label='Error')
-    ax2.tick_params(axis='y', labelcolor='tab:red')
     
     # Diversidad (si está disponible)
     if diversity_history:
-        ax3 = ax1.twinx()
-        ax3.spines["right"].set_position(("axes", 1.1))  # Desplazamiento del eje
-        ax3.set_ylabel('Diversidad', color='tab:purple')
-        ax3.plot(generations, diversity_history, 'purple', linestyle='--', label='Diversidad')
-        ax3.tick_params(axis='y', labelcolor='tab:purple')
+        ax2.plot(generations, diversity_history, 'purple', linestyle='--', label='Diversidad')
     
-    # Leyenda combinada
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax2.grid(True, alpha=0.3)
+    ax2.legend()
     
-    if diversity_history:
-        lines3, labels3 = ax3.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2 + lines3, labels1 + labels2 + labels3, loc='upper center', 
-                 bbox_to_anchor=(0.5, -0.15), ncol=4)
-    else:
-        ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper center', 
-                 bbox_to_anchor=(0.5, -0.15), ncol=3)
-    
-    plt.title('Evolución del Fitness, Error y Diversidad')
-    plt.grid(True, alpha=0.3)
     plt.tight_layout()
     
     # Incorporar gráfico en ventana Tkinter

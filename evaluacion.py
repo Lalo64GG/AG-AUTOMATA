@@ -1,14 +1,61 @@
 from afd import accepts_input
 
+def validate_final_states(afd, conjugations):
+    """
+    Verifica si los estados finales del AFD son realmente estados de conjugaciones completas.
+    
+    Parámetros:
+    - afd: Diccionario que representa el Autómata Finito Determinista
+    - conjugations: Lista de conjugaciones correctas
+    
+    Retorna:
+    - penalty: Un valor de penalización entre 0 y 1
+    """
+    total_conjugations = len(conjugations)
+    if total_conjugations == 0:
+        return 1.0  # Sin conjugaciones, máxima penalización
+    
+    # Rastrear estados que realmente llevan a conjugaciones completas
+    valid_final_states = set()
+    
+    # Verificar cada conjugación
+    for word in conjugations:
+        current_state = afd["initial_state"]
+        for i, symbol in enumerate(word):
+            # Transición al siguiente estado
+            current_state = afd["transitions"].get((current_state, symbol), -1)
+            
+            # Si no hay transición, la palabra no es válida
+            if current_state == -1:
+                break
+            
+            # Si es el último símbolo y es un estado final, marcarlo como válido
+            if i == len(word) - 1 and current_state in afd["final_states"]:
+                valid_final_states.add(current_state)
+    
+    # Calcular porcentaje de estados finales inválidos
+    invalid_final_states = afd["final_states"] - valid_final_states
+    
+    # Penalización basada en estados finales inválidos
+    if len(afd["final_states"]) == 0:
+        return 1.0  # Si no hay estados finales, máxima penalización
+    
+    # Calcular la penalización
+    invalid_ratio = len(invalid_final_states) / len(afd["final_states"])
+    
+    # Convertir la penalización a un valor entre 0 y 1
+    # Cuantos más estados finales inválidos, mayor la penalización
+    return min(1.0, invalid_ratio * 1.5)  # Máximo 1.0
+
 def evaluate_afd(afd, correct_conjugations, current_population=None):
     """Evalúa el AFD con bonus por diversidad si se proporciona la población actual."""
     if not correct_conjugations:
         return 0
     
     # Peso incrementado para la precisión
-    precision_weight = 0.98  # Incrementado de 0.95 a 0.98
+    precision_weight = 0.95  # Ligero ajuste
     
-    # Calcular precisión básica - ahora con pesos para enfatizar eficiencia en el reconocimiento
+    # Calcular precisión básica
     total_correct = len(correct_conjugations)
     
     # Introducir peso por longitud para favorecer palabras largas y complejas
@@ -30,21 +77,21 @@ def evaluate_afd(afd, correct_conjugations, current_population=None):
     # Precisión ponderada
     weighted_recall = weighted_correct / total_weights if total_weights > 0 else 0
     
-    # También calculamos precisión estándar para información y feedback
-    standard_recall = sum(accepts_input(afd, word) for word in correct_conjugations) / total_correct if total_correct > 0 else 0
+    # Penalización por estados finales inválidos
+    final_states_penalty = validate_final_states(afd, correct_conjugations)
     
-    # Reducir la penalización por complejidad (queremos AFDs más grandes si son necesarios)
-    complexity_penalty = min(0.10, len(afd["states"]) / (4 * total_correct))
+    # Reducir la penalización por complejidad
+    complexity_penalty = min(0.15, len(afd["states"]) / (4 * total_correct))
     
-    # Puntaje base con más énfasis en precision y menos penalización por complejidad
-    score = (precision_weight * weighted_recall) - complexity_penalty
+    # Calcular puntaje base
+    score = (precision_weight * weighted_recall) - complexity_penalty - final_states_penalty
     
     # Bonus por diversidad si tenemos la población actual
     if current_population and len(current_population) > 0:
         from genetico import diversity_measure
         avg_diversity = sum(diversity_measure(afd, other) for other in current_population) / len(current_population)
-        diversity_bonus = 0.07 * avg_diversity  # Incrementado a 7% de bonus por diversidad
+        diversity_bonus = 0.05 * avg_diversity  # Bonus por diversidad
         score += diversity_bonus
     
-    # Aseguramos que el score esté en el rango [0,1]
+    # Asegurar que el score esté en el rango [0,1]
     return max(0.0, min(1.0, score))

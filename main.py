@@ -14,7 +14,29 @@ from webScrapting import get_all_conjugations
 # Configuración optimizada
 POPULATION_SIZE = 40
 GENERATIONS = 150
-ALPHABET = list("abcdefghijklmnopqrstuvwxyzáéíóúñ ")
+
+# Función para generar el alfabeto a partir de las conjugaciones
+def generate_alphabet_from_conjugations(conjugations):
+    """
+    Genera un alfabeto basado en los caracteres presentes en las conjugaciones.
+    
+    Args:
+        conjugations (list): Lista de conjugaciones del verbo
+        
+    Returns:
+        list: Lista de caracteres únicos ordenados alfabéticamente
+    """
+    # Conjunto para almacenar caracteres únicos
+    unique_chars = set()
+    
+    # Extraer todos los caracteres de las conjugaciones
+    for word in conjugations:
+        for char in word:
+            unique_chars.add(char)
+    
+    # Convertir a lista y ordenar alfabéticamente
+    print(sorted(list(unique_chars)))  
+    return sorted(list(unique_chars))
 
 
 class AFDGeneratorApp:
@@ -33,6 +55,7 @@ class AFDGeneratorApp:
         self.avg_fitness_history = []
         self.error_history = []
         self.diversity_history = []
+        self.alphabet = []  # Nuevo: alfabeto dinámico
         
         # Variable para controlar actualizaciones de estado
         self.is_running = False
@@ -131,7 +154,11 @@ class AFDGeneratorApp:
                 self.verb_entry.config(state="normal")
                 return
             
+            # Generar alfabeto dinámico basado en las conjugaciones
+            self.alphabet = generate_alphabet_from_conjugations(self.conjugations)
+            
             self.update_status(f"Se encontraron {len(self.conjugations)} conjugaciones.")
+            self.update_status(f"Alfabeto generado: {', '.join(self.alphabet)}")
             time.sleep(0.5)  # Dar tiempo para leer el mensaje
             
             # Configurar el número de estados
@@ -144,10 +171,10 @@ class AFDGeneratorApp:
             self.error_history = []
             self.diversity_history = []
             
-            # Crear población inicial
+            # Crear población inicial con el alfabeto dinámico
             self.update_status("Creando población inicial...")
             initial_population_size = int(POPULATION_SIZE * 1.3)
-            initial_population = [create_random_afd(num_states=num_states, alphabet=ALPHABET) 
+            initial_population = [create_random_afd(num_states=num_states, alphabet=self.alphabet) 
                                 for _ in range(initial_population_size)]
             
             # Evaluar población inicial
@@ -235,7 +262,7 @@ class AFDGeneratorApp:
                             state_variation = random.randint(-2, 4)
                             new_num_states = max(5, min(num_states + state_variation, 25))
                             new_individuals.append(
-                                create_random_afd(num_states=new_num_states, alphabet=ALPHABET)
+                                create_random_afd(num_states=new_num_states, alphabet=self.alphabet)
                             )
                         
                         # Mantener mejores 30%
@@ -270,7 +297,7 @@ class AFDGeneratorApp:
                     
                     # Nuevos AFDs con más estados
                     increased_states = num_states + 5
-                    new_population = [create_random_afd(num_states=increased_states, alphabet=ALPHABET) 
+                    new_population = [create_random_afd(num_states=increased_states, alphabet=self.alphabet) 
                                     for _ in range(POPULATION_SIZE-1)]
                     
                     # Añadir el mejor AFD
